@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { s3Client, BUCKET_NAME } from '@/lib/s3-config'
+import { s3Client, BUCKET_NAME_PRODUCTION } from '@/lib/s3-config'
 
 export async function GET(request: NextRequest) {
     try {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
         }
 
         const command = new PutObjectCommand({
-            Bucket: BUCKET_NAME,
+            Bucket: BUCKET_NAME_PRODUCTION,
             Key: key,
         });
 

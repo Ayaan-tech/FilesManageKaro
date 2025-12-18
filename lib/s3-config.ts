@@ -28,6 +28,6 @@ export const s3ConfigQuarantine = {
 };
 export const s3ConfigProduction = {
   client: s3Client,
-  bucket: BUCKET_NAME,
+  bucket: BUCKET_NAME_PRODUCTION,
   region: REGION,
 };

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ListObjectsV2Command } from '@aws-sdk/client-s3'
-import { s3Client, BUCKET_NAME } from '@/lib/s3-config'
+import { s3Client, BUCKET_NAME,BUCKET_NAME_PRODUCTION } from '@/lib/s3-config'
 
 export async function GET(request: NextRequest) {
     try {
         const prefix = request.nextUrl.searchParams.get("prefix") || "";
         const command = new ListObjectsV2Command({
-            Bucket: BUCKET_NAME,
+            Bucket: BUCKET_NAME_PRODUCTION,
             Delimiter: '/',
             Prefix: prefix,
         })

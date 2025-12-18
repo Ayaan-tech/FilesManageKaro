@@ -49,12 +49,13 @@ interface FileNode {
 interface UploadingFile {
   file: File;
   progress: number;
-  status: 'uploading' | 'success' | 'error';
+  status: 'uploading' | 'success' | 'error' | 'scanning';
   isMultipart?: boolean;
   currentPart?: number;
   totalParts?: number;
   errorMessage?: string;
   uploadManager?: UploadManager;
+  scanStatus?: 'pending' | 'scanning' | 'clean' | 'infected' | 'error';
 }
 
 const FileExplorer: React.FC = () => {
@@ -76,6 +77,26 @@ const FileExplorer: React.FC = () => {
   
   // Keep track of active upload managers for retry functionality
   const uploadManagersRef = useRef<Map<string, UploadManager>>(new Map());
+
+  /**
+   * Trigger Lambda scan for uploaded file
+   * Calls /api/scan endpoint which invokes the ClamAV Lambda function
+   */
+  const triggerFileScan = async (key: string): Promise<void> => {
+  const response = await fetch("/api/scan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      key,
+      bucket: "quarantine-upload-321351515",
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(err || "Scan trigger failed");
+  }
+};
 
   useEffect(() => {
     fetchFiles();
@@ -239,15 +260,48 @@ const FileExplorer: React.FC = () => {
       throw new Error(`Upload failed: ${uploadResponse.statusText}`);
     }
 
-    // Update status to success
-    setUploadingFiles(current => {
-      const updated = new Map(current);
-      const existing = updated.get(fullKey);
-      if (existing) {
-        updated.set(fullKey, { ...existing, progress: 100, status: 'success' });
-      }
-      return updated;
-    });
+    // Update status to scanning
+          setUploadingFiles(current => {
+        const updated = new Map(current);
+        const existing = updated.get(fullKey);
+        if (existing) {
+          updated.set(fullKey, {
+            ...existing,
+            status: "scanning",
+            scanStatus: "scanning",
+          });
+        }
+        return updated;
+      });
+
+    // Trigger Lambda scan for the uploaded file
+    try {
+      await triggerFileScan(fullKey);
+      // Update status to success after scan triggered
+      setUploadingFiles(current => {
+        const updated = new Map(current);
+        const existing = updated.get(fullKey);
+        if (existing) {
+          updated.set(fullKey, {
+            ...existing,
+            status: "success",
+            scanStatus: "pending",
+          });
+        }
+        return updated;
+});
+    } catch (scanError) {
+      console.error('Scan trigger error:', scanError);
+      // Still mark as success but note scan issue
+      setUploadingFiles(current => {
+        const updated = new Map(current);
+        const existing = updated.get(fullKey);
+        if (existing) {
+          updated.set(fullKey, { ...existing, status: 'success', scanStatus: 'error' });
+        }
+        return updated;
+      });
+    }
   };
 
   /**
@@ -284,7 +338,8 @@ const FileExplorer: React.FC = () => {
           return updated;
         });
       },
-      onComplete: () => {
+      onComplete: async () => {
+        // Update status to scanning
         setUploadingFiles(current => {
           const updated = new Map(current);
           const existing = updated.get(fullKey);
@@ -292,11 +347,43 @@ const FileExplorer: React.FC = () => {
             updated.set(fullKey, {
               ...existing,
               progress: 100,
-              status: 'success',
+              status: 'scanning',
+              scanStatus: 'scanning',
             });
           }
           return updated;
         });
+
+        // Trigger Lambda scan for the uploaded file
+        try {
+          await triggerFileScan(fullKey);
+          setUploadingFiles(current => {
+            const updated = new Map(current);
+            const existing = updated.get(fullKey);
+            if (existing) {
+              updated.set(fullKey, {
+                ...existing,
+                status: 'success',
+                scanStatus: 'pending',
+              });
+            }
+            return updated;
+          });
+        } catch (scanError) {
+          console.error('Scan trigger error:', scanError);
+          setUploadingFiles(current => {
+            const updated = new Map(current);
+            const existing = updated.get(fullKey);
+            if (existing) {
+              updated.set(fullKey, {
+                ...existing,
+                status: 'success',
+                scanStatus: 'error',
+              });
+            }
+            return updated;
+          });
+        }
       },
     });
 
@@ -843,12 +930,15 @@ const FileExplorer: React.FC = () => {
                             <div className={`mr-2 ${
                               upload.status === 'success' ? 'text-green-500' : 
                               upload.status === 'error' ? 'text-red-500' : 
+                              upload.status === 'scanning' ? 'text-yellow-500' :
                               'text-blue-500'
                             }`}>
                               {upload.status === 'success' ? (
                                 <Check size={16} />
                               ) : upload.status === 'error' ? (
                                 <X size={16} />
+                              ) : upload.status === 'scanning' ? (
+                                <RefreshCw size={16} className="animate-spin" />
                               ) : (
                                 <Upload size={16} className="animate-pulse" />
                               )}
@@ -893,9 +983,17 @@ const FileExplorer: React.FC = () => {
                                 </span>
                               </div>
                             )}
+                            {upload.status === 'scanning' && (
+                              <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium flex items-center gap-1">
+                                <RefreshCw size={12} className="animate-spin" />
+                                Scanning...
+                              </span>
+                            )}
                             {upload.status === 'success' && (
                               <span className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                Uploaded
+                                {upload.scanStatus === 'pending' ? 'Uploaded (Scan Pending)' : 
+                                 upload.scanStatus === 'error' ? 'Uploaded (Scan Failed)' : 
+                                 'Uploaded'}
                               </span>
                             )}
                             {/* Error state with retry option (Requirement 8.2) */}

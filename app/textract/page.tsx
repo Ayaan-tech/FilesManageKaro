@@ -10,12 +10,20 @@ export default function TextractPage() {
         <div className="max-w-6xl mx-auto space-y-8">
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-              Document Analysis with AWS Textract
+              Intelligent Document Analysis
             </h1>
             <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
-              Upload receipts, invoices, and documents to automatically extract key information 
-              like vendor names, amounts, and dates using AWS Textract AI.
+              Upload any document for intelligent analysis. Our AI automatically detects document types 
+              and provides contextual insights - from invoice data extraction to contract summaries 
+              and general document understanding.
             </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2 text-sm text-gray-500">
+              <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 rounded-full">📄 Invoices & Receipts</span>
+              <span className="px-3 py-1 bg-green-100 dark:bg-green-900 rounded-full">📋 Contracts & Legal</span>
+              <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900 rounded-full">🏥 Medical Documents</span>
+              <span className="px-3 py-1 bg-orange-100 dark:bg-orange-900 rounded-full">📊 Reports & Analysis</span>
+              <span className="px-3 py-1 bg-gray-100 dark:bg-gray-900 rounded-full">📝 General Documents</span>
+            </div>
           </div>
           
           <TextractUploader />

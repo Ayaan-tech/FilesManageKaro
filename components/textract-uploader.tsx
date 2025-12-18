@@ -2,13 +2,36 @@
 
 import { useState } from "react";
 import { Upload, FileText, Loader2 } from "lucide-react";
+import DocumentAnalysisResult from "./document-analysis-result";
 
 interface AnalysisResult {
-  vendor: string;
-  total: string;
-  date: string;
   documentId: string;
   s3Key: string;
+  documentType: string;
+  typeDescription?: string;
+  confidence: number;
+  
+  // Invoice-specific
+  vendor?: string;
+  total?: string;
+  date?: string;
+  invoiceNumber?: string;
+  
+  // General document
+  title?: string;
+  summary?: string;
+  keyPoints?: string[];
+  documentLength?: number;
+  
+  // AI Summary
+  aiSummary?: {
+    keyPoints: string[];
+    explanation: string;
+    riskFactors?: string[];
+    actionItems?: string[];
+  };
+  
+  fileType: string;
 }
 
 export default function TextractUploader() {
@@ -97,40 +120,33 @@ export default function TextractUploader() {
 
       setUploading(false);
 
-      // Step 3: Check if file needs Textract analysis
-      const extension = file.name.split('.').pop()?.toLowerCase();
-      if (extension === 'txt') {
-        // TXT files are labels, no analysis needed
-        setResult({
-          vendor: "Label File",
-          total: "N/A",
-          date: "N/A",
-          documentId: `label_${Date.now()}`,
-          s3Key: key
-        });
-      } else {
-        // Images and PDFs need Textract analysis
-        setAnalyzing(true);
-        
-        console.log('[Frontend] Starting analysis for key:', key);
-        const analyzeResponse = await fetch("/api/textract/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ s3Key: key }),
-        });
-        
-        console.log('[Frontend] Analyze response status:', analyzeResponse.status);
+      // Step 3: Analyze all files (including TXT files for metadata storage)
+      setAnalyzing(true);
+      
+      console.log('[Frontend] Starting analysis for key:', key);
+      const analyzeResponse = await fetch("/api/textract/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ s3Key: key }),
+      });
+      
+      console.log('[Frontend] Analyze response status:', analyzeResponse.status);
 
-        if (!analyzeResponse.ok) {
-          const analyzeError = await analyzeResponse.json().catch(() => ({}));
-          console.error('[Frontend] Analysis failed:', analyzeError);
-          throw new Error(analyzeError.details || analyzeError.error || "Failed to analyze document");
-        }
-
-        const { data } = await analyzeResponse.json();
-        console.log('[Frontend] Analysis complete:', data);
-        setResult(data);
+      if (!analyzeResponse.ok) {
+        const analyzeError = await analyzeResponse.json().catch(() => ({}));
+        console.error('[Frontend] Analysis failed:', analyzeError);
+        throw new Error(analyzeError.details || analyzeError.error || "Failed to analyze document");
       }
+
+      const { data } = await analyzeResponse.json();
+      console.log('[Frontend] Analysis complete:', data);
+      setResult(data);
+      
+      // Trigger a page refresh to update document history
+      // In a production app, you'd use a state management solution or context
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('documentUploaded'));
+      }, 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -146,7 +162,7 @@ export default function TextractUploader() {
           Document Analysis
         </h2>
         <p className="text-gray-600 dark:text-gray-400">
-          Upload receipts or invoices for automatic data extraction
+          Upload any document for intelligent analysis and AI-powered insights
         </p>
       </div>
 
@@ -170,7 +186,7 @@ export default function TextractUploader() {
               {file ? file.name : "Click to upload or drag and drop"}
             </span>
             <span className="text-xs text-gray-500 mt-1">
-              JPG, PNG, TXT, PDF up to 10MB
+              Any document type: JPG, PNG, TXT, PDF up to 10MB
             </span>
           </label>
         </div>
@@ -204,41 +220,7 @@ export default function TextractUploader() {
         )}
 
         {/* Results */}
-        {result && (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-4">
-              Analysis Complete
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Vendor:
-                </span>
-                <p className="text-gray-900 dark:text-gray-100">{result.vendor}</p>
-              </div>
-              <div>
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Total Amount:
-                </span>
-                <p className="text-gray-900 dark:text-gray-100">{result.total}</p>
-              </div>
-              <div>
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Date:
-                </span>
-                <p className="text-gray-900 dark:text-gray-100">{result.date}</p>
-              </div>
-              <div>
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Document ID:
-                </span>
-                <p className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-                  {result.documentId}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        {result && <DocumentAnalysisResult result={result} />}
       </div>
     </div>
   );

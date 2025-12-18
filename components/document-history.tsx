@@ -21,17 +21,33 @@ export default function DocumentHistory() {
 
   useEffect(() => {
     fetchDocuments();
+    
+    // Listen for document upload events
+    const handleDocumentUploaded = () => {
+      console.log('[DocumentHistory] Document uploaded event received, refreshing...');
+      fetchDocuments();
+    };
+    
+    window.addEventListener('documentUploaded', handleDocumentUploaded);
+    
+    return () => {
+      window.removeEventListener('documentUploaded', handleDocumentUploaded);
+    };
   }, []);
 
   const fetchDocuments = async () => {
     try {
+      console.log('[DocumentHistory] Fetching documents...');
       const response = await fetch("/api/textract/documents");
       if (!response.ok) {
         throw new Error("Failed to fetch documents");
       }
       const data = await response.json();
+      console.log('[DocumentHistory] Received data:', data);
+      console.log('[DocumentHistory] Documents count:', data.documents?.length || 0);
       setDocuments(data.documents || []);
     } catch (err) {
+      console.error('[DocumentHistory] Error fetching documents:', err);
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);

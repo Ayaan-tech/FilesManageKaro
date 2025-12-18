@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {S3Client, PutObjectCommand} from '@aws-sdk/client-s3'
-import {getSignedUrl} from '@aws-sdk/s3-request-presigner'
-
-const s3client = new S3Client({
-    credentials:{
-        accessKeyId: process.env.AWS_ACCESS_KEY || "",
-        secretAccessKey: process.env.AWS_SECRET_KEY || "",
-    },
-    region:'ap-south-1',
-})
+import { PutObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { s3Client, BUCKET_NAME_PRODUCTION } from '@/lib/s3-config'
 
 export async function GET(request: NextRequest) {
     try {
@@ -20,11 +13,11 @@ export async function GET(request: NextRequest) {
         }
 
         const command = new PutObjectCommand({
-            Bucket: 'quarantine-upload-321351515',
+            Bucket: BUCKET_NAME_PRODUCTION,
             Key: key,
         });
 
-        const url = await getSignedUrl(s3client, command, { expiresIn: 3600 });
+        const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
         
         return NextResponse.json({ url }, { status: 200 });
         

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Folder, 
   File, 
@@ -15,12 +15,17 @@ import {
   FolderOpen,
   Upload,
   X,
-  Check
+  Check,
+  RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ToastContainer } from '@/components/ui/toast';
+import { UploadManager, UploadProgress, UploadError } from '@/lib/upload-manager';
+
+// Threshold for using multipart upload (5MB)
+const MULTIPART_THRESHOLD = 5 * 1024 * 1024;
 
 interface S3Object {
   Key: string;
@@ -41,6 +46,17 @@ interface FileNode {
   children?: FileNode[];
 }
 
+interface UploadingFile {
+  file: File;
+  progress: number;
+  status: 'uploading' | 'success' | 'error';
+  isMultipart?: boolean;
+  currentPart?: number;
+  totalParts?: number;
+  errorMessage?: string;
+  uploadManager?: UploadManager;
+}
+
 const FileExplorer: React.FC = () => {
   const [fileStructure, setFileStructure] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +65,7 @@ const FileExplorer: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [demoMode, setDemoMode] = useState(false);
-  const [uploadingFiles, setUploadingFiles] = useState<Map<string, { file: File; progress: number; status: 'uploading' | 'success' | 'error' }>>(new Map());
+  const [uploadingFiles, setUploadingFiles] = useState<Map<string, UploadingFile>>(new Map());
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Array<{
     id: string;
@@ -57,6 +73,9 @@ const FileExplorer: React.FC = () => {
     title: string;
     message?: string;
   }>>([]);
+  
+  // Keep track of active upload managers for retry functionality
+  const uploadManagersRef = useRef<Map<string, UploadManager>>(new Map());
 
   useEffect(() => {
     fetchFiles();
@@ -159,6 +178,201 @@ const FileExplorer: React.FC = () => {
     return roots;
   };
 
+  /**
+   * Upload a small file using presigned URL (existing flow)
+   */
+  const uploadSmallFile = async (file: File, fullKey: string): Promise<void> => {
+    const newUploadingFiles = new Map(uploadingFiles);
+    
+    // Add to uploading state
+    newUploadingFiles.set(fullKey, { file, progress: 0, status: 'uploading', isMultipart: false });
+    setUploadingFiles(new Map(newUploadingFiles));
+
+    // Simulate progress for getting presigned URL
+    setUploadingFiles(current => {
+      const updated = new Map(current);
+      const existing = updated.get(fullKey);
+      if (existing) {
+        updated.set(fullKey, { ...existing, progress: 10 });
+      }
+      return updated;
+    });
+
+    // Request presigned URL
+    const response = await fetch(`/api/upload?key=${encodeURIComponent(fullKey)}`);
+    if (!response.ok) {
+      throw new Error(`Failed to get presigned URL: ${response.statusText}`);
+    }
+    
+    const { url } = await response.json();
+
+    // Simulate progress for upload start
+    setUploadingFiles(current => {
+      const updated = new Map(current);
+      const existing = updated.get(fullKey);
+      if (existing) {
+        updated.set(fullKey, { ...existing, progress: 30 });
+      }
+      return updated;
+    });
+
+    // Upload file using presigned URL
+    const uploadResponse = await fetch(url, {
+      method: 'PUT',
+      body: file,
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+      },
+    });
+
+    // Simulate progress during upload
+    setUploadingFiles(current => {
+      const updated = new Map(current);
+      const existing = updated.get(fullKey);
+      if (existing) {
+        updated.set(fullKey, { ...existing, progress: 80 });
+      }
+      return updated;
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+    }
+
+    // Update status to success
+    setUploadingFiles(current => {
+      const updated = new Map(current);
+      const existing = updated.get(fullKey);
+      if (existing) {
+        updated.set(fullKey, { ...existing, progress: 100, status: 'success' });
+      }
+      return updated;
+    });
+  };
+
+  /**
+   * Upload a large file using multipart upload (Requirements: 1.1, 7.1)
+   */
+  const uploadLargeFile = async (file: File, fullKey: string): Promise<void> => {
+    const uploadManager = new UploadManager({
+      onProgress: (progress: UploadProgress) => {
+        setUploadingFiles(current => {
+          const updated = new Map(current);
+          const existing = updated.get(fullKey);
+          if (existing) {
+            updated.set(fullKey, {
+              ...existing,
+              progress: progress.percentage,
+              currentPart: progress.currentPart,
+              totalParts: progress.totalParts,
+            });
+          }
+          return updated;
+        });
+      },
+      onError: (error: UploadError) => {
+        setUploadingFiles(current => {
+          const updated = new Map(current);
+          const existing = updated.get(fullKey);
+          if (existing) {
+            updated.set(fullKey, {
+              ...existing,
+              status: 'error',
+              errorMessage: error.message,
+            });
+          }
+          return updated;
+        });
+      },
+      onComplete: () => {
+        setUploadingFiles(current => {
+          const updated = new Map(current);
+          const existing = updated.get(fullKey);
+          if (existing) {
+            updated.set(fullKey, {
+              ...existing,
+              progress: 100,
+              status: 'success',
+            });
+          }
+          return updated;
+        });
+      },
+    });
+
+    // Store upload manager for potential retry
+    uploadManagersRef.current.set(fullKey, uploadManager);
+
+    // Add to uploading state with multipart flag
+    setUploadingFiles(current => {
+      const updated = new Map(current);
+      updated.set(fullKey, {
+        file,
+        progress: 0,
+        status: 'uploading',
+        isMultipart: true,
+        currentPart: 0,
+        totalParts: Math.ceil(file.size / (5 * 1024 * 1024)),
+        uploadManager,
+      });
+      return updated;
+    });
+
+    // Start the upload
+    await uploadManager.upload(file, fullKey);
+    
+    // Clean up upload manager reference after success
+    uploadManagersRef.current.delete(fullKey);
+  };
+
+  /**
+   * Retry a failed upload
+   */
+  const retryUpload = async (fullKey: string) => {
+    const uploadState = uploadingFiles.get(fullKey);
+    if (!uploadState || uploadState.status !== 'error') return;
+
+    const { file, isMultipart } = uploadState;
+    
+    // Reset state to uploading
+    setUploadingFiles(current => {
+      const updated = new Map(current);
+      updated.set(fullKey, {
+        ...uploadState,
+        progress: 0,
+        status: 'uploading',
+        errorMessage: undefined,
+      });
+      return updated;
+    });
+
+    try {
+      if (isMultipart) {
+        await uploadLargeFile(file, fullKey);
+      } else {
+        await uploadSmallFile(file, fullKey);
+      }
+      
+      // Show success toast with file details (Requirement 8.3)
+      const uploadType = isMultipart ? 'multipart' : 'direct';
+      addToast('success', 'Upload Complete', `${file.name} (${formatFileSize(file.size)}) uploaded successfully via ${uploadType} upload`);
+      
+      // Remove from uploading state after 3 seconds and refresh file list (Requirement 8.3)
+      setTimeout(() => {
+        setUploadingFiles(current => {
+          const updated = new Map(current);
+          updated.delete(fullKey);
+          return updated;
+        });
+        // Refresh file list to show the new file
+        fetchFiles();
+      }, 3000);
+    } catch (error) {
+      console.error('Retry upload error:', error);
+      addToast('error', 'Upload Failed', `Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   const handleFileUpload = async (folderPath: string, files: FileList) => {
     if (demoMode) {
       addToast('info', 'Demo Mode Active', 'Upload is not available in demo mode. Please switch to live mode.');
@@ -167,91 +381,52 @@ const FileExplorer: React.FC = () => {
 
     addToast('info', 'Upload Started', `Uploading ${files.length} file(s)...`);
 
-    const newUploadingFiles = new Map(uploadingFiles);
-
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const fullKey = folderPath ? `${folderPath}/${file.name}` : file.name;
       
-      // Add to uploading state
-      newUploadingFiles.set(fullKey, { file, progress: 0, status: 'uploading' });
-      setUploadingFiles(new Map(newUploadingFiles));
-
       try {
-        // Simulate progress for getting presigned URL
-        newUploadingFiles.set(fullKey, { file, progress: 10, status: 'uploading' });
-        setUploadingFiles(new Map(newUploadingFiles));
-
-        // Request presigned URL
-        const response = await fetch(`/api/upload?key=${encodeURIComponent(fullKey)}`);
-        if (!response.ok) {
-          throw new Error(`Failed to get presigned URL: ${response.statusText}`);
-        }
-        
-        const { url } = await response.json();
-
-        // Simulate progress for upload start
-        newUploadingFiles.set(fullKey, { file, progress: 30, status: 'uploading' });
-        setUploadingFiles(new Map(newUploadingFiles));
-
-        // Upload file using presigned URL with progress simulation
-        const uploadResponse = await fetch(url, {
-          method: 'PUT',
-          body: file,
-          headers: {
-            'Content-Type': file.type || 'application/octet-stream',
-          },
-        });
-
-        // Simulate progress during upload
-        newUploadingFiles.set(fullKey, { file, progress: 80, status: 'uploading' });
-        setUploadingFiles(new Map(newUploadingFiles));
-
-        if (!uploadResponse.ok) {
-          throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+        // Use multipart upload for files > 5MB (Requirement 1.1, 7.1)
+        if (file.size > MULTIPART_THRESHOLD) {
+          await uploadLargeFile(file, fullKey);
+        } else {
+          await uploadSmallFile(file, fullKey);
         }
 
-        // Update status to success
-        newUploadingFiles.set(fullKey, { file, progress: 100, status: 'success' });
-        setUploadingFiles(new Map(newUploadingFiles));
+        // Show success toast with file details (Requirement 8.3)
+        const uploadType = file.size > MULTIPART_THRESHOLD ? 'multipart' : 'direct';
+        addToast('success', 'Upload Complete', `${file.name} (${formatFileSize(file.size)}) uploaded successfully via ${uploadType} upload`);
 
-        addToast('success', 'Upload Complete', `${file.name} uploaded successfully`);
-
-        // Remove from uploading state after 3 seconds
+        // Remove from uploading state after 3 seconds and refresh file list (Requirement 8.3)
         setTimeout(() => {
           setUploadingFiles(current => {
             const updated = new Map(current);
             updated.delete(fullKey);
             return updated;
           });
+          // Refresh file list to show the new file
+          fetchFiles();
         }, 3000);
 
       } catch (error) {
         console.error('Upload error:', error);
         addToast('error', 'Upload Failed', `Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         
-        newUploadingFiles.set(fullKey, { 
-          file, 
-          progress: 0, 
-          status: 'error' 
-        });
-        setUploadingFiles(new Map(newUploadingFiles));
-
-        // Remove error state after 5 seconds
+        // Error state is already set by the upload functions
+        // Remove error state after 30 seconds (longer for retry opportunity)
         setTimeout(() => {
           setUploadingFiles(current => {
             const updated = new Map(current);
-            updated.delete(fullKey);
+            // Only remove if still in error state
+            const existing = updated.get(fullKey);
+            if (existing?.status === 'error') {
+              updated.delete(fullKey);
+            }
             return updated;
           });
-        }, 5000);
+        }, 30000);
       }
     }
-
-    // Refresh file list after uploads
-    setTimeout(() => {
-      fetchFiles();
-    }, 2000);
   };
 
   const triggerFileUpload = (folderPath: string) => {
@@ -653,7 +828,7 @@ const FileExplorer: React.FC = () => {
           
           <CardContent className="p-0">
             <div className="max-h-[600px] overflow-y-auto border-t">
-              {/* Upload Progress Section */}
+              {/* Upload Progress Section (Requirements: 8.1, 8.2) */}
               {uploadingFiles.size > 0 && (
                 <div className="border-b bg-gray-50 dark:bg-gray-900/50">
                   <div className="p-4">
@@ -675,25 +850,47 @@ const FileExplorer: React.FC = () => {
                               ) : upload.status === 'error' ? (
                                 <X size={16} />
                               ) : (
-                                <Upload size={16} />
+                                <Upload size={16} className="animate-pulse" />
                               )}
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                                 {upload.file.name}
+                                {upload.isMultipart && (
+                                  <span className="ml-2 text-xs text-blue-600 dark:text-blue-400 font-normal">
+                                    (Multipart)
+                                  </span>
+                                )}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 {key} • {formatFileSize(upload.file.size)}
+                                {/* Show part progress for multipart uploads (Requirement 8.1) */}
+                                {upload.isMultipart && upload.status === 'uploading' && upload.totalParts && (
+                                  <span className="ml-2 text-blue-600 dark:text-blue-400">
+                                    • Part {upload.currentPart || 0}/{upload.totalParts}
+                                  </span>
+                                )}
                               </div>
+                              {/* Show error message if available */}
+                              {upload.status === 'error' && upload.errorMessage && (
+                                <div className="text-xs text-red-500 dark:text-red-400 mt-1 truncate">
+                                  {upload.errorMessage}
+                                </div>
+                              )}
                             </div>
                           </div>
-                          <div className="ml-4 flex items-center">
+                          <div className="ml-4 flex items-center gap-2">
                             {upload.status === 'uploading' && (
-                              <div className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-blue-500 transition-all duration-300 ease-out"
-                                  style={{ width: `${upload.progress}%` }}
-                                />
+                              <div className="flex items-center gap-2">
+                                <div className="w-20 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-blue-500 transition-all duration-300 ease-out"
+                                    style={{ width: `${upload.progress}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
+                                  {upload.progress}%
+                                </span>
                               </div>
                             )}
                             {upload.status === 'success' && (
@@ -701,10 +898,23 @@ const FileExplorer: React.FC = () => {
                                 Uploaded
                               </span>
                             )}
+                            {/* Error state with retry option (Requirement 8.2) */}
                             {upload.status === 'error' && (
-                              <span className="text-xs text-red-600 dark:text-red-400 font-medium">
-                                Failed
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-red-600 dark:text-red-400 font-medium">
+                                  Failed
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={() => retryUpload(key)}
+                                  title="Retry upload"
+                                >
+                                  <RotateCcw size={12} className="mr-1" />
+                                  Retry
+                                </Button>
+                              </div>
                             )}
                           </div>
                         </div>

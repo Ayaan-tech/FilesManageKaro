@@ -1,24 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import {S3Client, ListObjectsV2Command} from '@aws-sdk/client-s3'
-
-const s3client = new S3Client({
-    credentials:{
-        accessKeyId: process.env.AWS_ACCESS_KEY || "",
-        secretAccessKey: process.env.AWS_SECRET_KEY || "",
-    },
-    region:'ap-south-1',
-})
+import { ListObjectsV2Command } from '@aws-sdk/client-s3'
+import { s3Client, BUCKET_NAME } from '@/lib/s3-config'
 
 export async function GET(request: NextRequest) {
     try {
         const prefix = request.nextUrl.searchParams.get("prefix") || "";
         const command = new ListObjectsV2Command({
-            Bucket:'myawsstoragebucket51515',
+            Bucket: BUCKET_NAME,
             Delimiter: '/',
             Prefix: prefix,
         })
         
-        const result = await s3client.send(command);
+        const result = await s3Client.send(command);
         console.log('S3 Response:', result);
         
         const modifiedResponse = result.Contents?.map((item) => ({

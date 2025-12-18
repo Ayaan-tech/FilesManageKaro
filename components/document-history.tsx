@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FileText, Calendar, DollarSign, Building2, Loader2, Image, FileType } from "lucide-react";
+import { FileText, Calendar, DollarSign, Building2, Loader2, Image, FileType, Download, FileSpreadsheet } from "lucide-react";
 
 interface Document {
   documentId: string;
@@ -17,6 +17,7 @@ export default function DocumentHistory() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -43,6 +44,76 @@ export default function DocumentHistory() {
       month: "short",
       day: "numeric",
     });
+  };
+
+  const exportDocument = async (documentId: string) => {
+    try {
+      setExporting(documentId);
+      console.log('[Export] Exporting document:', documentId);
+      
+      const response = await fetch(`/api/textract/export?documentId=${encodeURIComponent(documentId)}`);
+      
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      // Get the blob from response
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `document_${documentId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      console.log('[Export] Document exported successfully');
+    } catch (err) {
+      console.error('[Export] Error:', err);
+      alert('Failed to export document. Please try again.');
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const exportAllDocuments = async () => {
+    try {
+      setExporting('all');
+      console.log('[Export] Exporting all documents');
+      
+      const response = await fetch('/api/textract/export');
+      
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      // Get the blob from response
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `all_documents_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      console.log('[Export] All documents exported successfully');
+    } catch (err) {
+      console.error('[Export] Error:', err);
+      alert('Failed to export documents. Please try again.');
+    } finally {
+      setExporting(null);
+    }
   };
 
   if (loading) {
@@ -79,13 +150,34 @@ export default function DocumentHistory() {
             View all your processed documents and their extracted data
           </p>
         </div>
-        <button
-          onClick={fetchDocuments}
-          disabled={loading}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
-        >
-          {loading ? "Loading..." : "Refresh"}
-        </button>
+        <div className="flex gap-2">
+          {documents.length > 0 && (
+            <button
+              onClick={exportAllDocuments}
+              disabled={exporting === 'all'}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
+            >
+              {exporting === 'all' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Export All CSV
+                </>
+              )}
+            </button>
+          )}
+          <button
+            onClick={fetchDocuments}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+          >
+            {loading ? "Loading..." : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {documents.length === 0 ? (
@@ -164,13 +256,32 @@ export default function DocumentHistory() {
                   </div>
                 </div>
                 
-                <div className="text-right">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Uploaded
-                  </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {formatDate(doc.uploadTime)}
-                  </p>
+                <div className="text-right flex flex-col items-end gap-2">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Uploaded
+                    </p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {formatDate(doc.uploadTime)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => exportDocument(doc.s3Key)}
+                    disabled={exporting === doc.s3Key}
+                    className="px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded text-sm transition-colors flex items-center gap-1"
+                  >
+                    {exporting === doc.s3Key ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Exporting...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3 h-3" />
+                        Export CSV
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>

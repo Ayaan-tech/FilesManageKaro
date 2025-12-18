@@ -1,0 +1,42 @@
+[
+  {
+    "documentId": "doc_1766042761156",
+    "vendor": "RESTORAN WAN SHENG",
+    "totalAmount": "$6.00",
+    "invoiceDate": "02-04-2018",
+    "s3Key": "textract/images/user_370DUhd1fPVIGZIKhKjVmvt7nHW/1766042732972_X51008030563.jpg",
+    "uploadTime": "2025-12-18T07:26:01.157Z",
+    "fileType": "image",
+    "userId": "user_370DUhd1fPVIGZIKhKjVmvt7nHW"
+  },
+  {
+    "documentId": "doc_1766042927344",
+    "vendor": "RESTORAN WAN SHENG",
+    "totalAmount": "$17.60",
+    "invoiceDate": "09-04-2018",
+    "s3Key": "textract/images/user_370DUhd1fPVIGZIKhKjVmvt7nHW/1766042924694_X51008030561.jpg",
+    "uploadTime": "2025-12-18T07:28:47.345Z",
+    "fileType": "image",
+    "userId": "user_370DUhd1fPVIGZIKhKjVmvt7nHW"
+  },
+  {
+    "documentId": "doc_1766042959707",
+    "vendor": "**Royaltea*>",
+    "totalAmount": "$13.10",
+    "invoiceDate": "02/06/2018",
+    "s3Key": "textract/images/user_370DUhd1fPVIGZIKhKjVmvt7nHW/1766042955165_X51007846403.jpg",
+    "uploadTime": "2025-12-18T07:29:19.712Z",
+    "fileType": "image",
+    "userId": "user_370DUhd1fPVIGZIKhKjVmvt7nHW"
+  },
+  {
+    "documentId": "doc_1766043227274",
+    "vendor": "HON HWA HARDWARE TRADING",
+    "totalAmount": "$10.40",
+    "invoiceDate": "21/09/2017",
+    "s3Key": "textract/images/user_370DUhd1fPVIGZIKhKjVmvt7nHW/1766043224587_X51009568881.jpg",
+    "uploadTime": "2025-12-18T07:33:47.274Z",
+    "fileType": "image",
+    "userId": "user_370DUhd1fPVIGZIKhKjVmvt7nHW"
+  }
+]

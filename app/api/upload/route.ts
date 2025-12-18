@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         }
 
         const command = new PutObjectCommand({
-            Bucket: 'myawsstoragebucket51515',
+            Bucket: 'quarantine-upload-321351515',
             Key: key,
         });
 

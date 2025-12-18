@@ -6,7 +6,9 @@ export async function GET(request: NextRequest) {
     try {
         const prefix = request.nextUrl.searchParams.get("prefix") || "";
         const command = new ListObjectsV2Command({
+
             Bucket: BUCKET_NAME_PRODUCTION,
+            Bucket:'quarantine-upload-321351515',
             Delimiter: '/',
             Prefix: prefix,
         })

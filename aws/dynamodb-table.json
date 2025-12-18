@@ -1,0 +1,91 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "DynamoDB table for Textract document metadata",
+  "Resources": {
+    "DocumentMetadataTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": "DocumentMetadata",
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "FileID",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "UserId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "UploadTimestamp",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "FileID",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "UserIdIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "UserId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "UploadTimestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "TimeToLiveSpecification": {
+          "AttributeName": "TTL",
+          "Enabled": true
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "TextractProcessor"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Development"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "TableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "DocumentMetadataTable"
+      },
+      "Export": {
+        "Name": "DocumentMetadataTableName"
+      }
+    },
+    "TableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "DocumentMetadataTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": "DocumentMetadataTableArn"
+      }
+    }
+  }
+}

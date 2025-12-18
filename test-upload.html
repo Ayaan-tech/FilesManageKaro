@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Textract Upload</title>
+</head>
+<body>
+    <h1>Test Textract Upload</h1>
+    <input type="file" id="fileInput" accept=".jpg,.jpeg,.png">
+    <button onclick="testUpload()">Test Upload</button>
+    <div id="result"></div>
+
+    <script>
+        async function testUpload() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+
+            try {
+                // Step 1: Get upload URL
+                console.log('Step 1: Getting upload URL...');
+                const uploadResponse = await fetch('/api/textract/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fileName: file.name,
+                        fileType: file.type
+                    })
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error('Failed to get upload URL');
+                }
+
+                const { uploadUrl, key } = await uploadResponse.json();
+                console.log('Got upload URL and key:', key);
+
+                // Step 2: Upload to S3
+                console.log('Step 2: Uploading to S3...');
+                const s3Response = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    body: file,
+                    headers: { 'Content-Type': file.type }
+                });
+
+                if (!s3Response.ok) {
+                    throw new Error('Failed to upload to S3');
+                }
+
+                console.log('File uploaded successfully');
+
+                // Step 3: Analyze with Textract
+                console.log('Step 3: Analyzing with Textract...');
+                const analyzeResponse = await fetch('/api/textract/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ s3Key: key })
+                });
+
+                if (!analyzeResponse.ok) {
+                    const error = await analyzeResponse.json();
+                    throw new Error(`Analysis failed: ${error.details || error.error}`);
+                }
+
+                const { data } = await analyzeResponse.json();
+                console.log('Analysis complete:', data);
+
+                resultDiv.innerHTML = `
+                    <h3>Success!</h3>
+                    <p><strong>Vendor:</strong> ${data.vendor}</p>
+                    <p><strong>Total:</strong> ${data.total}</p>
+                    <p><strong>Date:</strong> ${data.date}</p>
+                    <p><strong>Document ID:</strong> ${data.documentId}</p>
+                `;
+
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,14 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
-import {
-  ClerkProvider,
-  SignInButton,
-  SignUpButton,
-  SignIn,
-  SignedIn,
-  SignedOut,
-  UserButton,
-} from '@clerk/nextjs'
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,19 +26,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-      <body
-        className={`${inter.variable} antialiased`}
-      >
-       <SignedOut>
-       <div className="min-h-screen flex flex-col items-center justify-center">
-         <SignIn routing="hash " />
-       </div>
-       </SignedOut>
-       <SignedIn>{children}</SignedIn>
+    <html lang="en">
+      <body className={`${inter.variable} antialiased`}>
+        {/* Clerk authentication will be properly integrated in later tasks */}
+        <div className="min-h-screen">
+          {children}
+        </div>
       </body>
     </html>
-    </ClerkProvider>
   );
 }

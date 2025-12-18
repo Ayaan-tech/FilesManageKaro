@@ -21,7 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ToastContainer } from '@/components/ui/toast';
+// import { ToastContainer } from '@/components/ui/toast';
 import { UploadManager, UploadProgress, UploadError } from '@/lib/upload-manager';
 
 // Threshold for using multipart upload (5MB)
@@ -712,7 +712,7 @@ const FileExplorer: React.FC = () => {
   if (loading) {
     return (
       <>
-        <ToastContainer toasts={toasts} onClose={removeToast} />
+        {/* <ToastContainer toasts={toasts} onClose={removeToast} /> */}
         <Card>
           <CardContent className="flex items-center justify-center p-12">
             <div className="flex flex-col items-center space-y-4">
@@ -727,7 +727,7 @@ const FileExplorer: React.FC = () => {
 
   return (
     <>
-      <ToastContainer toasts={toasts} onClose={removeToast} />
+      {/* <ToastContainer toasts={toasts} onClose={removeToast} /> */}
       <Card className="w-full relative">
         {dragOver === '' && (
           <div className="absolute inset-0 bg-blue-100 dark:bg-blue-900/30 border-2 border-dashed border-blue-400 rounded-lg flex items-center justify-center z-50">

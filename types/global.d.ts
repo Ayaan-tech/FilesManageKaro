@@ -1,3 +1,5 @@
+import '@testing-library/jest-dom'
+
 export {}
 
 // Create a type for the Roles
@@ -7,6 +9,7 @@ declare global {
   interface CustomJwtSessionClaims {
     metadata: {
       role?: Roles
+      onboardingComplete?: boolean
     }
   }
 }
